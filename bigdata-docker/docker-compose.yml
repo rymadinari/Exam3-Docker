@@ -1,3 +1,12 @@
+version: "3.8"
+
+networks:
+  bigdata-net:
+
+volumes:
+  namenode:
+  datanode:
+
 services:
 
   zookeeper:
@@ -5,6 +14,8 @@ services:
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - bigdata-net
 
   kafka:
     image: confluentinc/cp-kafka:7.5.0
@@ -18,6 +29,8 @@ services:
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
       KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    networks:
+      - bigdata-net
 
   jupyter:
     image: jupyter/base-notebook:latest
@@ -29,6 +42,8 @@ services:
       - ./producer:/home/jovyan/producer
     depends_on:
       - kafka
+    networks:
+      - bigdata-net
 
   spark-master:
     image: apache/spark:3.5.0
@@ -39,6 +54,8 @@ services:
       - "8080:8080"
     volumes:
       - ./spark:/opt/spark-apps
+    networks:
+      - bigdata-net
 
   spark-worker:
     image: apache/spark:3.5.0
@@ -46,3 +63,32 @@ services:
     command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
     depends_on:
       - spark-master
+    networks:
+      - bigdata-net
+
+  namenode:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    container_name: namenode
+    environment:
+      - CLUSTER_NAME=test
+      - CORE_CONF_fs_defaultFS=hdfs://namenode:8020
+    ports:
+      - "9870:9870"
+      - "8020:8020"
+    volumes:
+      - namenode:/hadoop/dfs/name
+    networks:
+      - bigdata-net
+
+  datanode:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    container_name: datanode
+    depends_on:
+      - namenode
+    environment:
+      - CORE_CONF_fs_defaultFS=hdfs://namenode:8020
+      - SERVICE_PRECONDITION=namenode:9870
+    volumes:
+      - datanode:/hadoop/dfs/data
+    networks:
+      - bigdata-net
